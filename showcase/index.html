@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProFold Replay Lab</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="data/replay.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070a12;
+      --panel: rgba(15, 22, 38, 0.86);
+      --panel-strong: #111a2e;
+      --line: #223251;
+      --text: #eef7ff;
+      --muted: #91a2bd;
+      --green: #75f0a0;
+      --cyan: #65d8ff;
+      --amber: #ffcf6b;
+      --red: #ff6b88;
+      --purple: #b996ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(101, 216, 255, 0.16), transparent 30rem),
+        radial-gradient(circle at 85% 15%, rgba(185, 150, 255, 0.14), transparent 28rem),
+        linear-gradient(135deg, #05070d 0%, #09111d 55%, #120d1f 100%);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .shell {
+      width: min(1440px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 32px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 72px);
+      letter-spacing: -0.08em;
+      line-height: 0.9;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      max-width: 820px;
+      line-height: 1.55;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      background: rgba(8, 13, 24, 0.78);
+      border-radius: 999px;
+      padding: 9px 13px;
+      color: var(--cyan);
+      white-space: nowrap;
+      box-shadow: 0 0 24px rgba(101, 216, 255, 0.08);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 360px;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 15px 16px;
+      font-size: 13px;
+      color: var(--cyan);
+      border-bottom: 1px solid var(--line);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .episode-rail {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: 720px;
+      overflow: auto;
+    }
+
+    .episode-card {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0a1020;
+      color: var(--text);
+      text-align: left;
+      border-radius: 16px;
+      padding: 12px;
+      cursor: pointer;
+      transition: 140ms ease;
+    }
+
+    .episode-card:hover,
+    .episode-card.active {
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+      box-shadow: 0 0 0 1px rgba(101, 216, 255, 0.2), 0 0 28px rgba(101, 216, 255, 0.08);
+    }
+
+    .episode-card .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 16px currentColor;
+      flex: 0 0 auto;
+    }
+
+    .dot.good { background: var(--green); color: var(--green); }
+    .dot.bad { background: var(--red); color: var(--red); }
+
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .stage {
+      min-height: 720px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      background: var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stat {
+      background: rgba(9, 15, 28, 0.92);
+      padding: 14px;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .value {
+      margin-top: 7px;
+      font-size: 20px;
+      color: var(--text);
+    }
+
+    .protein-screen {
+      position: relative;
+      min-height: 520px;
+      background:
+        linear-gradient(rgba(101, 216, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101, 216, 255, 0.04) 1px, transparent 1px),
+        radial-gradient(circle at 50% 50%, rgba(117, 240, 160, 0.06), transparent 24rem);
+      background-size: 32px 32px, 32px 32px, auto;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+      display: block;
+    }
+
+    .bond {
+      stroke: rgba(238, 247, 255, 0.45);
+      stroke-width: 5;
+      stroke-linecap: round;
+    }
+
+    .contact {
+      stroke: var(--green);
+      stroke-width: 2.5;
+      stroke-dasharray: 6 8;
+      opacity: 0.85;
+    }
+
+    .residue {
+      stroke: #07101c;
+      stroke-width: 3;
+      cursor: crosshair;
+      filter: drop-shadow(0 0 12px rgba(101, 216, 255, 0.18));
+    }
+
+    .residue.H { fill: var(--amber); }
+    .residue.P { fill: var(--cyan); }
+    .residue.C { fill: var(--purple); }
+    .residue.action { stroke: var(--green); stroke-width: 6; }
+    .residue.critical-ring { stroke: var(--red); }
+
+    .residue-label {
+      fill: #08101c;
+      font-weight: 800;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      font-size: 13px;
+    }
+
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      max-width: 260px;
+      padding: 10px 12px;
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      background: rgba(3, 8, 16, 0.94);
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.38);
+      z-index: 4;
+    }
+
+    .legend {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(7, 10, 18, 0.76);
+      color: var(--muted);
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+
+    .swatch.H { background: var(--amber); }
+    .swatch.P { background: var(--cyan); }
+    .swatch.C { background: var(--purple); }
+    .swatch.risk { background: var(--red); }
+
+    .controls {
+      border-top: 1px solid var(--line);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      background: rgba(8, 13, 24, 0.88);
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    select {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0c1425;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    .side {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .side-body {
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .sequence {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .aa {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #08101c;
+      font-weight: 800;
+      font-size: 12px;
+      background: var(--cyan);
+      opacity: 0.42;
+    }
+
+    .aa.H { background: var(--amber); }
+    .aa.P { background: var(--cyan); }
+    .aa.C { background: var(--purple); }
+    .aa.placed { opacity: 1; }
+    .aa.current { outline: 2px solid var(--green); }
+
+    .reasoning,
+    .action-box,
+    .risk-box {
+      border: 1px solid var(--line);
+      background: rgba(7, 10, 18, 0.66);
+      border-radius: 16px;
+      padding: 12px;
+      line-height: 1.48;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .reasoning {
+      max-height: 260px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .mutations {
+      display: grid;
+      gap: 8px;
+      max-height: 190px;
+      overflow: auto;
+    }
+
+    .mutation {
+      border-left: 3px solid var(--red);
+      background: rgba(255, 107, 136, 0.08);
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+      .stage { min-height: auto; }
+      .hud { grid-template-columns: repeat(2, 1fr); }
+      header { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>ProFold</h1>
+        <p class="subtitle">A Mesocosm replay lab for protein folding: scrub through model decisions, inspect residues, and see how fold geometry plus mutation risk shape the score.</p>
+      </div>
+      <div class="badge" id="runBadge">Loading replay...</div>
+    </header>
+
+    <main class="layout">
+      <aside class="panel">
+        <h2>Episodes</h2>
+        <div class="episode-rail" id="episodeRail"></div>
+      </aside>
+
+      <section class="panel stage">
+        <div class="hud">
+          <div class="stat"><div class="label">Turn</div><div class="value" id="turnStat">0 / 0</div></div>
+          <div class="stat"><div class="label">Reward</div><div class="value" id="rewardStat">0.00</div></div>
+          <div class="stat"><div class="label">Score</div><div class="value" id="scoreStat">0.00</div></div>
+          <div class="stat"><div class="label">Contacts</div><div class="value" id="contactStat">0</div></div>
+          <div class="stat"><div class="label">Health</div><div class="value" id="healthStat">1.00</div></div>
+        </div>
+
+        <div class="protein-screen" id="proteinScreen">
+          <svg id="proteinSvg" role="img" aria-label="Protein fold lattice"></svg>
+          <div class="tooltip" id="tooltip"></div>
+          <div class="legend">
+            <span class="pill"><span class="swatch H"></span>Hydrophobic</span>
+            <span class="pill"><span class="swatch P"></span>Polar</span>
+            <span class="pill"><span class="swatch C"></span>Critical</span>
+            <span class="pill"><span class="swatch risk"></span>Health risk</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <input type="range" id="scrubber" min="0" max="0" value="0" aria-label="Timeline scrubber">
+          <div class="control-row">
+            <button id="playBtn">Play</button>
+            <button id="backBtn">Step Back</button>
+            <button id="nextBtn">Step Forward</button>
+            <label class="small" for="speedSelect">Speed</label>
+            <select id="speedSelect">
+              <option value="2000">0.5x</option>
+              <option value="1000" selected>1x</option>
+              <option value="500">2x</option>
+              <option value="250">4x</option>
+            </select>
+            <span class="small">Keyboard: space toggles play, arrows step.</span>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel side">
+        <h2>Live Trace</h2>
+        <div class="side-body">
+          <div>
+            <div class="label">Sequence</div>
+            <div class="sequence" id="sequenceView"></div>
+          </div>
+          <div>
+            <div class="label">Chosen Action</div>
+            <div class="action-box" id="actionBox">No action yet.</div>
+          </div>
+          <div>
+            <div class="label">Model Reasoning</div>
+            <div class="reasoning" id="reasoningBox">No reasoning yet.</div>
+          </div>
+          <div>
+            <div class="label">Risk Notes</div>
+            <div class="risk-box" id="riskBox"></div>
+          </div>
+          <div>
+            <div class="label">Mutation Events</div>
+            <div class="mutations" id="mutationLog"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      data: null,
+      episodeIds: [],
+      episodeIndex: 0,
+      turnIndex: 0,
+      playing: false,
+      timer: null
+    };
+
+    const els = {
+      runBadge: document.getElementById("runBadge"),
+      episodeRail: document.getElementById("episodeRail"),
+      scrubber: document.getElementById("scrubber"),
+      playBtn: document.getElementById("playBtn"),
+      backBtn: document.getElementById("backBtn"),
+      nextBtn: document.getElementById("nextBtn"),
+      speedSelect: document.getElementById("speedSelect"),
+      turnStat: document.getElementById("turnStat"),
+      rewardStat: document.getElementById("rewardStat"),
+      scoreStat: document.getElementById("scoreStat"),
+      contactStat: document.getElementById("contactStat"),
+      healthStat: document.getElementById("healthStat"),
+      sequenceView: document.getElementById("sequenceView"),
+      actionBox: document.getElementById("actionBox"),
+      reasoningBox: document.getElementById("reasoningBox"),
+      riskBox: document.getElementById("riskBox"),
+      mutationLog: document.getElementById("mutationLog"),
+      tooltip: document.getElementById("tooltip"),
+      screen: document.getElementById("proteinScreen"),
+      svg: d3.select("#proteinSvg")
+    };
+
+    async function loadReplay() {
+      try {
+        const response = await fetch("data/replay.json", { cache: "no-store" });
+        if (!response.ok) throw new Error("No replay.json");
+        return await response.json();
+      } catch (error) {
+        return window.REPLAY;
+      }
+    }
+
+    function episodeEntries(data) {
+      const replay = data.replay || {};
+      return Object.keys(replay);
+    }
+
+    function currentTurns() {
+      const id = state.episodeIds[state.episodeIndex];
+      return state.data.replay[id] || [];
+    }
+
+    function safeJson(value, fallback) {
+      if (!value) return fallback;
+      if (typeof value === "object") return value;
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        return fallback;
+      }
+    }
+
+    function foldState(turn) {
+      const fromInfo = safeJson(turn.info && turn.info.fold_state, null);
+      if (fromInfo) return fromInfo;
+      const obs = turn.observation || {};
+      return {
+        scenario_name: obs.scenario || "Unknown scenario",
+        sequence: obs.sequence || "",
+        chain: obs.chain || [],
+        contacts: 0,
+        exposed_hydrophobics: 0,
+        compactness: 0,
+        health_burden: obs.health_burden || 0,
+        health_score: 1,
+        total_reward: obs.score_so_far || 0,
+        mutations: [],
+        critical_indices: []
+      };
+    }
+
+    function actionDetail(turn) {
+      return safeJson(turn.info && turn.info.action_detail, turn.action || {});
+    }
+
+    function renderEpisodes() {
+      els.episodeRail.innerHTML = "";
+      state.episodeIds.forEach((id, index) => {
+        const turns = state.data.replay[id] || [];
+        const last = turns[turns.length - 1] || {};
+        const fs = foldState(last);
+        const score = Number(fs.total_reward || last.reward || 0);
+        const button = document.createElement("button");
+        button.className = `episode-card ${index === state.episodeIndex ? "active" : ""}`;
+        const tone = score > 8 ? "good" : score < 0 ? "bad" : "";
+        button.innerHTML = `
+          <div class="top"><strong>${shortId(id, index)}</strong><span class="dot ${tone}"></span></div>
+          <div class="small">${turns.length} turns · score ${format(score)} · health ${format(fs.health_score)}</div>
+        `;
+        button.addEventListener("click", () => {
+          state.episodeIndex = index;
+          state.turnIndex = 0;
+          stop();
+          renderAll();
+        });
+        els.episodeRail.appendChild(button);
+      });
+    }
+
+    function shortId(id, index) {
+      return `Episode ${index + 1} · ${String(id).slice(0, 8)}`;
+    }
+
+    function renderAll() {
+      const turns = currentTurns();
+      if (!turns.length) return;
+      state.turnIndex = Math.max(0, Math.min(state.turnIndex, turns.length - 1));
+      els.scrubber.max = String(turns.length - 1);
+      els.scrubber.value = String(state.turnIndex);
+      renderEpisodes();
+      renderTurn(turns[state.turnIndex], turns.length);
+    }
+
+    function renderTurn(turn, turnCount) {
+      const fs = foldState(turn);
+      const action = actionDetail(turn);
+      const obs = turn.observation || {};
+      els.runBadge.textContent = fs.scenario_name || obs.scenario || "ProFold replay";
+      els.turnStat.textContent = `${state.turnIndex + 1} / ${turnCount}`;
+      els.rewardStat.textContent = format(turn.reward || 0);
+      els.scoreStat.textContent = format((turn.info && turn.info.score) || fs.total_reward || obs.score_so_far || 0);
+      els.contactStat.textContent = String((turn.info && turn.info.contacts) || fs.contacts || 0);
+      els.healthStat.textContent = format((turn.info && turn.info.health_score) || fs.health_score || 1);
+      els.actionBox.textContent = JSON.stringify(turn.action || action || {}, null, 2);
+      els.reasoningBox.textContent = turn.reasoning || "No model reasoning recorded for this turn.";
+      els.riskBox.textContent = obs.risk_notes || fs.risk_notes || "No risk note recorded.";
+      renderSequence(fs, obs, action);
+      renderMutations(fs);
+      renderProtein(fs, action);
+    }
+
+    function renderSequence(fs, obs, action) {
+      const sequence = fs.sequence || obs.sequence || "";
+      const placed = new Set((fs.chain || []).map(d => d.index));
+      const currentIndex = Number(action.residue_index);
+      els.sequenceView.innerHTML = "";
+      sequence.split("").forEach((letter, index) => {
+        const span = document.createElement("span");
+        span.className = `aa ${letter} ${placed.has(index) ? "placed" : ""} ${index === currentIndex ? "current" : ""}`;
+        span.textContent = letter;
+        span.title = `Residue ${index}: ${letter}`;
+        els.sequenceView.appendChild(span);
+      });
+    }
+
+    function renderMutations(fs) {
+      const mutations = fs.mutations || [];
+      els.mutationLog.innerHTML = "";
+      if (!mutations.length) {
+        els.mutationLog.innerHTML = `<div class="small">No mutations recorded yet.</div>`;
+        return;
+      }
+      mutations.forEach(mutation => {
+        const div = document.createElement("div");
+        div.className = "mutation";
+        div.textContent = `Residue ${mutation.residue_index}: ${mutation.original_class} -> ${mutation.mutated_class}, health delta ${mutation.mutation_health_delta}`;
+        els.mutationLog.appendChild(div);
+      });
+    }
+
+    function renderProtein(fs, action) {
+      const chain = fs.chain || [];
+      const rect = els.screen.getBoundingClientRect();
+      const width = Math.max(rect.width, 500);
+      const height = Math.max(rect.height, 520);
+      const svg = els.svg.attr("viewBox", [0, 0, width, height].join(" "));
+      svg.selectAll("*").remove();
+
+      if (!chain.length) return;
+      const xs = chain.map(d => d.x);
+      const ys = chain.map(d => d.y);
+      const xScale = d3.scaleLinear().domain([Math.min(...xs) - 1, Math.max(...xs) + 1]).range([80, width - 80]);
+      const yScale = d3.scaleLinear().domain([Math.min(...ys) - 1, Math.max(...ys) + 1]).range([80, height - 80]);
+      const placedAction = Number(action.residue_index);
+      const contacts = contactPairs(chain);
+
+      svg.append("g")
+        .selectAll("line")
+        .data(contacts)
+        .join("line")
+        .attr("class", "contact")
+        .attr("x1", d => xScale(d[0].x))
+        .attr("y1", d => yScale(d[0].y))
+        .attr("x2", d => xScale(d[1].x))
+        .attr("y2", d => yScale(d[1].y));
+
+      svg.append("g")
+        .selectAll("line")
+        .data(d3.pairs(chain))
+        .join("line")
+        .attr("class", "bond")
+        .attr("x1", d => xScale(d[0].x))
+        .attr("y1", d => yScale(d[0].y))
+        .attr("x2", d => xScale(d[1].x))
+        .attr("y2", d => yScale(d[1].y));
+
+      const node = svg.append("g")
+        .selectAll("g")
+        .data(chain)
+        .join("g")
+        .attr("transform", d => `translate(${xScale(d.x)},${yScale(d.y)})`)
+        .on("mousemove", (event, d) => showTooltip(event, residueText(d, fs)))
+        .on("mouseleave", hideTooltip);
+
+      node.append("circle")
+        .attr("r", 22)
+        .attr("class", d => `residue ${d.class} ${d.index === placedAction ? "action" : ""} ${d.critical ? "critical-ring" : ""}`);
+
+      node.append("text")
+        .attr("class", "residue-label")
+        .text(d => d.class);
+
+      node.append("text")
+        .attr("y", 39)
+        .attr("fill", "#91a2bd")
+        .attr("font-size", 11)
+        .attr("text-anchor", "middle")
+        .text(d => d.index);
+
+      svg.append("text")
+        .attr("x", 22)
+        .attr("y", 34)
+        .attr("fill", "#91a2bd")
+        .attr("font-size", 13)
+        .text(`Compactness ${format(fs.compactness)} · Exposed H ${fs.exposed_hydrophobics || 0}`);
+    }
+
+    function contactPairs(chain) {
+      const pairs = [];
+      for (let i = 0; i < chain.length; i++) {
+        for (let j = i + 2; j < chain.length; j++) {
+          const a = chain[i];
+          const b = chain[j];
+          if (!["H", "C"].includes(a.class) || !["H", "C"].includes(b.class)) continue;
+          if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1) pairs.push([a, b]);
+        }
+      }
+      return pairs;
+    }
+
+    function residueText(d, fs) {
+      return `
+        <strong>Residue ${d.index}</strong><br>
+        Class: ${d.class} (${d.label || "unknown"})<br>
+        Original: ${d.original_class}<br>
+        Position: (${d.x}, ${d.y})<br>
+        Critical: ${d.critical ? "yes" : "no"}<br>
+        Fold contacts: ${fs.contacts || 0}<br>
+        Health burden: ${format(fs.health_burden || 0)}
+      `;
+    }
+
+    function showTooltip(event, html) {
+      const box = els.screen.getBoundingClientRect();
+      els.tooltip.innerHTML = html;
+      els.tooltip.style.display = "block";
+      els.tooltip.style.left = `${event.clientX - box.left + 14}px`;
+      els.tooltip.style.top = `${event.clientY - box.top + 14}px`;
+    }
+
+    function hideTooltip() {
+      els.tooltip.style.display = "none";
+    }
+
+    function format(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num.toFixed(2) : String(value);
+    }
+
+    function step(delta) {
+      const turns = currentTurns();
+      state.turnIndex = Math.max(0, Math.min(state.turnIndex + delta, turns.length - 1));
+      renderAll();
+    }
+
+    function play() {
+      if (state.playing) return;
+      state.playing = true;
+      els.playBtn.textContent = "Pause";
+      state.timer = window.setInterval(() => {
+        const turns = currentTurns();
+        if (state.turnIndex >= turns.length - 1) {
+          stop();
+          return;
+        }
+        step(1);
+      }, Number(els.speedSelect.value));
+    }
+
+    function stop() {
+      state.playing = false;
+      els.playBtn.textContent = "Play";
+      if (state.timer) window.clearInterval(state.timer);
+      state.timer = null;
+    }
+
+    els.playBtn.addEventListener("click", () => state.playing ? stop() : play());
+    els.backBtn.addEventListener("click", () => { stop(); step(-1); });
+    els.nextBtn.addEventListener("click", () => { stop(); step(1); });
+    els.scrubber.addEventListener("input", event => {
+      stop();
+      state.turnIndex = Number(event.target.value);
+      renderAll();
+    });
+    els.speedSelect.addEventListener("change", () => {
+      if (state.playing) {
+        stop();
+        play();
+      }
+    });
+    window.addEventListener("keydown", event => {
+      if (event.target.tagName === "SELECT") return;
+      if (event.key === " ") {
+        event.preventDefault();
+        state.playing ? stop() : play();
+      } else if (event.key === "ArrowRight") {
+        stop();
+        step(1);
+      } else if (event.key === "ArrowLeft") {
+        stop();
+        step(-1);
+      }
+    });
+    window.addEventListener("resize", () => renderAll());
+
+    loadReplay().then(data => {
+      state.data = data || window.REPLAY;
+      state.episodeIds = episodeEntries(state.data);
+      if (!state.episodeIds.length) {
+        els.runBadge.textContent = "No replay data found";
+        return;
+      }
+      renderAll();
+    });
+  </script>
+</body>
+</html>

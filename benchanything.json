@@ -1,0 +1,59 @@
+{
+  "id": "protien-folder",
+  "adapter": "adapter.py",
+  "name": "ProFold",
+  "description": "A deterministic protein-folding benchmark where agents optimize lattice stability while avoiding mutation choices that increase simulated patient health risk.",
+  "binding_vow": {
+    "version": "1.0.0",
+    "tier": "tier1",
+    "description": "The agent folds a simplified protein on a 2D hydrophobic-polar lattice. Each action places the next residue in one of four directions and may keep, conservatively mutate, riskily mutate, or repair the residue. Good policies form non-covalent hydrophobic contacts, keep hydrophobic residues buried, maintain compactness, avoid self-intersections, and avoid risky mutations at critical disease-linked residues.",
+    "observation_space": {
+      "type": "json",
+      "description": "JSON object containing scenario, sequence, placed chain coordinates, next residue class, critical-residue flag, valid directions, score_so_far, health_burden, and action_schema."
+    },
+    "action_space": {
+      "type": "json",
+      "description": "Return a JSON object: {\"direction\":\"up|right|down|left\", \"mutation\":\"keep|conservative|risky|repair\"}. Direction places the next residue on the lattice. Mutation changes health risk and sometimes residue class."
+    },
+    "reward": {
+      "type": "scalar",
+      "range": {
+        "low": -8.0,
+        "high": 35.0
+      },
+      "description": "Weighted non-binary reward: hydrophobic contacts and compact folds increase score; exposed hydrophobics, collisions, out-of-bounds moves, and health-risky mutations reduce score."
+    },
+    "episode": {
+      "max_steps": 15,
+      "deterministic_reset": true,
+      "supports_seed": true,
+      "parallel_episodes": 1,
+      "observability": "full"
+    },
+    "techniques": []
+  },
+  "scoring": {
+    "primary_metric": "fold_reward",
+    "higher_is_better": true,
+    "metrics": [
+      {
+        "name": "fold_reward",
+        "type": "episode_reward",
+        "aggregation": "mean"
+      },
+      {
+        "name": "health_score",
+        "type": "terminal_field",
+        "field": "health_score",
+        "aggregation": "mean"
+      },
+      {
+        "name": "hydrophobic_contacts",
+        "type": "terminal_field",
+        "field": "contacts",
+        "aggregation": "mean"
+      }
+    ]
+  },
+  "tags": ["protein-folding", "hp-model", "mutation-risk", "deterministic"]
+}
