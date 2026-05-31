@@ -2,7 +2,7 @@
   "id": "protien-folder",
   "adapter": "adapter.py",
   "name": "ProFold",
-  "description": "A deterministic protein-folding benchmark where agents optimize lattice stability while avoiding mutation choices that increase simulated patient health risk.",
+  "description": "A deterministic protein-folding benchmark where agents optimize lattice stability while avoiding mutation choices that increase simulated patient health risk. Interactive showcase: https://navneethd8.github.io/protien-folder/",
   "binding_vow": {
     "version": "1.0.0",
     "tier": "tier1",

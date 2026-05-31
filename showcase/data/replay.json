@@ -1,4 +1,4 @@
-window.REPLAY = {
+{
   "schema_version": "1",
   "exported_at": "2026-05-31T05:49:41.193977+00:00",
   "visibility": "gallery_public",
@@ -4933,4 +4933,4 @@ window.REPLAY = {
       }
     ]
   }
-};
+}
