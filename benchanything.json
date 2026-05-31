@@ -34,7 +34,7 @@
       "description": "Weighted non-binary reward: hydrophobic contacts and compact folds increase score; exposed hydrophobics, collisions, out-of-bounds moves, and health-risky mutations reduce score."
     },
     "episode": {
-      "max_steps": 15,
+      "max_steps": 9,
       "deterministic_reset": true,
       "supports_seed": true,
       "parallel_episodes": 1,

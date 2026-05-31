@@ -20,22 +20,22 @@ SCENARIOS = [
     {
         "id": "cftr-channel",
         "name": "CFTR-like chloride channel segment",
-        "sequence": "HPPHCHPHHPPCHHP",
-        "critical": {4, 11, 14},
+        "sequence": "HPPHCHPHHP",
+        "critical": {4, 8},
         "risk_notes": "Misfolded channel segments can be degraded before reaching the cell surface.",
     },
     {
         "id": "amyloid-core",
         "name": "Amyloid-prone hydrophobic core",
-        "sequence": "HHPPHCHHPPHPCHP",
-        "critical": {5, 12},
+        "sequence": "HHPPHCHHPP",
+        "critical": {5},
         "risk_notes": "Exposed hydrophobic patches raise aggregation pressure linked to toxic plaques.",
     },
     {
         "id": "enzyme-pocket",
         "name": "Enzyme active-site pocket",
-        "sequence": "PHHPCPHHPPCHHPP",
-        "critical": {4, 6, 11},
+        "sequence": "PHHPCPHHPP",
+        "critical": {4, 6},
         "risk_notes": "Critical pocket mutations can reduce catalytic activity or destabilize the fold.",
     },
 ]
