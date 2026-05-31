@@ -1,0 +1,12 @@
+[
+  {
+    "id": "claude",
+    "label": "Claude Sonnet",
+    "file": "claude.json"
+  },
+  {
+    "id": "openai",
+    "label": "GPT-4o",
+    "file": "openai.json"
+  }
+]
