@@ -83,7 +83,11 @@ class ProFoldEnv(BaseEnv):
         if isinstance(action, dict):
             direction = str(action.get("direction", "")).strip().lower()
             mutation = str(action.get("mutation", "keep")).strip().lower()
-            return {"direction": direction, "mutation": mutation}
+            rationale = str(action.get("rationale", "")).strip()
+            parsed = {"direction": direction, "mutation": mutation}
+            if rationale:
+                parsed["rationale"] = rationale
+            return parsed
 
         text = str(action).strip()
         try:
@@ -324,6 +328,7 @@ class ProFoldEnv(BaseEnv):
             "action_schema": {
                 "direction": list(DIRECTIONS.keys()),
                 "mutation": ["keep", "conservative", "risky", "repair"],
+                "rationale": "short free-text explanation of this move",
             },
             "message": message,
         }

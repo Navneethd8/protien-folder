@@ -89,6 +89,19 @@ class ProFoldTests(unittest.TestCase):
         result = env.step(scripted_policy(obs))
         self.assertTrue(all(isinstance(value, str) for value in result.info.values()))
 
+    def test_rationale_is_preserved_in_action_detail(self) -> None:
+        env = ProFoldEnv()
+        env.reset(seed=3)
+        result = env.step(
+            {
+                "direction": "right",
+                "mutation": "keep",
+                "rationale": "Extend the chain right to keep hydrophobics clustered.",
+            }
+        )
+        detail = json.loads(result.info["action_detail"])
+        self.assertEqual(detail["rationale"], "Extend the chain right to keep hydrophobics clustered.")
+
 
 if __name__ == "__main__":
     unittest.main()

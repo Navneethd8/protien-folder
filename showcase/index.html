@@ -733,6 +733,17 @@
       return safeJson(turn.info && turn.info.action_detail, turn.action || {});
     }
 
+    function turnReasoning(turn, action) {
+      const redacted = "[redacted: not visible on public gallery]";
+      if (turn.reasoning && turn.reasoning !== redacted) {
+        return turn.reasoning;
+      }
+      const rationale = action.rationale || (turn.action && turn.action.rationale) || "";
+      if (rationale) return rationale;
+      if (turn.reasoning === redacted) return redacted;
+      return "No model reasoning recorded for this turn.";
+    }
+
     function renderEpisodes() {
       els.episodeRail.innerHTML = "";
       state.episodeIds.forEach((id, index) => {
@@ -784,7 +795,7 @@
       els.contactStat.textContent = String((turn.info && turn.info.contacts) || fs.contacts || 0);
       els.healthStat.textContent = format((turn.info && turn.info.health_score) || fs.health_score || 1);
       els.actionBox.textContent = JSON.stringify(turn.action || action || {}, null, 2);
-      els.reasoningBox.textContent = turn.reasoning || "No model reasoning recorded for this turn.";
+      els.reasoningBox.textContent = turnReasoning(turn, action);
       els.riskBox.textContent = obs.risk_notes || fs.risk_notes || "No risk note recorded.";
       renderSequence(fs, obs, action);
       renderMutations(fs);

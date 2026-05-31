@@ -22,6 +22,10 @@
           "type": "discrete",
           "enum_values": ["keep", "conservative", "risky", "repair"],
           "description": "Mutation intervention for the next residue. Prefer keep/repair over risky mutations at critical residues."
+        },
+        "rationale": {
+          "type": "text",
+          "description": "One or two sentences explaining the fold direction and mutation choice, including hydrophobic burial, collision avoidance, and health risk at critical residues."
         }
       }
     },
