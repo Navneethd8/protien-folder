@@ -259,11 +259,20 @@
       background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.52) 100%);
     }
 
-    svg {
+    .protein-canvas,
+    .protein-canvas canvas {
       width: 100%;
       height: 100%;
       min-height: 520px;
       display: block;
+    }
+
+    .protein-canvas canvas {
+      cursor: grab;
+    }
+
+    .protein-canvas canvas:active {
+      cursor: grabbing;
     }
 
     .bond {
@@ -496,7 +505,7 @@
         </div>
 
         <div class="protein-screen" id="proteinScreen">
-          <svg id="proteinSvg" role="img" aria-label="Protein fold lattice"></svg>
+          <div id="protein3d" class="protein-canvas" role="img" aria-label="Three.js protein fold lattice"></div>
           <div class="tooltip" id="tooltip"></div>
           <div class="legend">
             <span class="pill"><span class="swatch H"></span>Hydrophobic</span>
@@ -552,7 +561,9 @@
     </main>
   </div>
 
-  <script>
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js";
+
     const state = {
       data: null,
       episodeIds: [],
@@ -582,7 +593,25 @@
       mutationLog: document.getElementById("mutationLog"),
       tooltip: document.getElementById("tooltip"),
       screen: document.getElementById("proteinScreen"),
-      svg: d3.select("#proteinSvg")
+      protein3d: document.getElementById("protein3d")
+    };
+
+    const threeView = {
+      renderer: null,
+      scene: null,
+      camera: null,
+      group: null,
+      raycaster: null,
+      pointer: null,
+      residues: [],
+      currentFoldState: null,
+      rotationX: -0.65,
+      rotationY: 0.7,
+      zoom: 11,
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+      animationId: null
     };
 
     async function loadReplay() {
@@ -728,66 +757,234 @@
       const rect = els.screen.getBoundingClientRect();
       const width = Math.max(rect.width, 500);
       const height = Math.max(rect.height, 520);
-      const svg = els.svg.attr("viewBox", [0, 0, width, height].join(" "));
-      svg.selectAll("*").remove();
 
+      ensureThree(width, height);
+      clearProteinScene();
       if (!chain.length) return;
-      const xs = chain.map(d => d.x);
-      const ys = chain.map(d => d.y);
-      const xScale = d3.scaleLinear().domain([Math.min(...xs) - 1, Math.max(...xs) + 1]).range([80, width - 80]);
-      const yScale = d3.scaleLinear().domain([Math.min(...ys) - 1, Math.max(...ys) + 1]).range([80, height - 80]);
+
+      threeView.currentFoldState = fs;
       const placedAction = Number(action.residue_index);
       const contacts = contactPairs(chain);
+      const center = proteinCenter(chain);
+      const points = chain.map((residue) => new THREE.Vector3(
+        (residue.x - center.x) * 1.35,
+        -(residue.y - center.y) * 1.35,
+        Math.sin(residue.index * 1.7) * 0.52
+      ));
 
-      svg.append("g")
-        .selectAll("line")
-        .data(contacts)
-        .join("line")
-        .attr("class", "contact")
-        .attr("x1", d => xScale(d[0].x))
-        .attr("y1", d => yScale(d[0].y))
-        .attr("x2", d => xScale(d[1].x))
-        .attr("y2", d => yScale(d[1].y));
+      const grid = new THREE.GridHelper(18, 18, 0x1f5f3f, 0x0b2d1b);
+      grid.rotation.x = Math.PI / 2;
+      grid.position.z = -1.1;
+      threeView.group.add(grid);
 
-      svg.append("g")
-        .selectAll("line")
-        .data(d3.pairs(chain))
-        .join("line")
-        .attr("class", "bond")
-        .attr("x1", d => xScale(d[0].x))
-        .attr("y1", d => yScale(d[0].y))
-        .attr("x2", d => xScale(d[1].x))
-        .attr("y2", d => yScale(d[1].y));
+      d3.pairs(points).forEach(([start, end]) => {
+        threeView.group.add(cylinderBetween(start, end, 0.07, 0xd8ffe2, 0.52));
+      });
 
-      const node = svg.append("g")
-        .selectAll("g")
-        .data(chain)
-        .join("g")
-        .attr("transform", d => `translate(${xScale(d.x)},${yScale(d.y)})`)
-        .on("mousemove", (event, d) => showTooltip(event, residueText(d, fs)))
-        .on("mouseleave", hideTooltip);
+      contacts.forEach(([a, b]) => {
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([points[a.index], points[b.index]]),
+          new THREE.LineDashedMaterial({
+            color: 0x6dff9a,
+            dashSize: 0.16,
+            gapSize: 0.11,
+            transparent: true,
+            opacity: 0.86
+          })
+        );
+        line.computeLineDistances();
+        threeView.group.add(line);
+      });
 
-      node.append("circle")
-        .attr("r", 22)
-        .attr("class", d => `residue ${d.class} ${d.index === placedAction ? "action" : ""} ${d.critical ? "critical-ring" : ""}`);
+      chain.forEach((residue, index) => {
+        const mesh = residueSphere(residue, points[index], residue.index === placedAction);
+        mesh.userData = { residue };
+        threeView.residues.push(mesh);
+        threeView.group.add(mesh);
+        threeView.group.add(labelSprite(String(residue.index), points[index].clone().add(new THREE.Vector3(0, -0.48, 0))));
+      });
 
-      node.append("text")
-        .attr("class", "residue-label")
-        .text(d => d.class);
+      const terminalText = labelSprite(
+        `compact ${format(fs.compactness)} // exposed-H ${fs.exposed_hydrophobics || 0}`,
+        new THREE.Vector3(-4.9, 4.15, 0),
+        0.55
+      );
+      terminalText.material.opacity = 0.72;
+      threeView.group.add(terminalText);
+    }
 
-      node.append("text")
-        .attr("y", 39)
-        .attr("fill", "#91a2bd")
-        .attr("font-size", 11)
-        .attr("text-anchor", "middle")
-        .text(d => d.index);
+    function ensureThree(width, height) {
+      if (!threeView.renderer) {
+        threeView.scene = new THREE.Scene();
+        threeView.scene.fog = new THREE.Fog(0x010503, 10, 24);
+        threeView.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+        threeView.camera.position.set(0, 0, threeView.zoom);
+        threeView.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        threeView.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        threeView.renderer.setSize(width, height);
+        threeView.renderer.setClearColor(0x010503, 0);
+        els.protein3d.appendChild(threeView.renderer.domElement);
+        threeView.group = new THREE.Group();
+        threeView.scene.add(threeView.group);
+        threeView.raycaster = new THREE.Raycaster();
+        threeView.pointer = new THREE.Vector2();
 
-      svg.append("text")
-        .attr("x", 22)
-        .attr("y", 34)
-        .attr("fill", "#91a2bd")
-        .attr("font-size", 13)
-        .text(`Compactness ${format(fs.compactness)} · Exposed H ${fs.exposed_hydrophobics || 0}`);
+        const ambient = new THREE.AmbientLight(0x6dff9a, 0.75);
+        const key = new THREE.PointLight(0x64ffd1, 2.2, 40);
+        key.position.set(4, 5, 8);
+        const back = new THREE.PointLight(0x00ff66, 1.1, 34);
+        back.position.set(-6, -3, 6);
+        threeView.scene.add(ambient, key, back);
+        bindThreeControls();
+        animateThree();
+      }
+
+      threeView.camera.aspect = width / height;
+      threeView.camera.position.z = threeView.zoom;
+      threeView.camera.updateProjectionMatrix();
+      threeView.renderer.setSize(width, height);
+    }
+
+    function clearProteinScene() {
+      if (!threeView.group) return;
+      while (threeView.group.children.length) {
+        disposeObject(threeView.group.children.pop());
+      }
+      threeView.residues = [];
+    }
+
+    function disposeObject(object) {
+      if (!object) return;
+      if (object.geometry) object.geometry.dispose();
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.filter(Boolean).forEach((material) => {
+        if (material.map) material.map.dispose();
+        material.dispose();
+      });
+    }
+
+    function animateThree() {
+      threeView.animationId = requestAnimationFrame(animateThree);
+      if (!threeView.renderer || !threeView.scene || !threeView.camera) return;
+      if (threeView.group) {
+        threeView.group.rotation.x = threeView.rotationX;
+        threeView.group.rotation.y = threeView.rotationY;
+      }
+      threeView.renderer.render(threeView.scene, threeView.camera);
+    }
+
+    function bindThreeControls() {
+      const canvas = threeView.renderer.domElement;
+      canvas.addEventListener("pointerdown", (event) => {
+        threeView.dragging = true;
+        threeView.lastX = event.clientX;
+        threeView.lastY = event.clientY;
+        canvas.setPointerCapture(event.pointerId);
+      });
+      canvas.addEventListener("pointerup", (event) => {
+        threeView.dragging = false;
+        canvas.releasePointerCapture(event.pointerId);
+      });
+      canvas.addEventListener("pointermove", (event) => {
+        if (threeView.dragging) {
+          const dx = event.clientX - threeView.lastX;
+          const dy = event.clientY - threeView.lastY;
+          threeView.rotationY += dx * 0.008;
+          threeView.rotationX += dy * 0.008;
+          threeView.lastX = event.clientX;
+          threeView.lastY = event.clientY;
+        }
+        updateThreeHover(event);
+      });
+      canvas.addEventListener("mouseleave", hideTooltip);
+      canvas.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        threeView.zoom = Math.max(6, Math.min(18, threeView.zoom + event.deltaY * 0.01));
+        threeView.camera.position.z = threeView.zoom;
+      }, { passive: false });
+    }
+
+    function updateThreeHover(event) {
+      if (!threeView.raycaster || !threeView.camera || !threeView.residues.length) return;
+      const rect = threeView.renderer.domElement.getBoundingClientRect();
+      threeView.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      threeView.pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+      threeView.raycaster.setFromCamera(threeView.pointer, threeView.camera);
+      const [hit] = threeView.raycaster.intersectObjects(threeView.residues, false);
+      if (hit && hit.object.userData.residue) {
+        showTooltip(event, residueText(hit.object.userData.residue, threeView.currentFoldState || {}));
+      } else if (!threeView.dragging) {
+        hideTooltip();
+      }
+    }
+
+    function residueSphere(residue, position, isAction) {
+      const color = residue.class === "H" ? 0xd6ff76 : residue.class === "C" ? 0xb7ffb8 : 0x64ffd1;
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        emissive: isAction ? 0x00ff66 : color,
+        emissiveIntensity: isAction ? 0.65 : 0.16,
+        roughness: 0.34,
+        metalness: 0.18
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(isAction ? 0.36 : 0.29, 32, 18), material);
+      mesh.position.copy(position);
+      if (residue.critical) {
+        const halo = new THREE.Mesh(
+          new THREE.SphereGeometry(0.43, 32, 18),
+          new THREE.MeshBasicMaterial({ color: 0xff5f78, wireframe: true, transparent: true, opacity: 0.42 })
+        );
+        halo.position.copy(position);
+        threeView.group.add(halo);
+      }
+      return mesh;
+    }
+
+    function cylinderBetween(start, end, radius, color, opacity = 1) {
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 16);
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        transparent: opacity < 1,
+        opacity,
+        emissive: color,
+        emissiveIntensity: 0.08
+      });
+      const cylinder = new THREE.Mesh(geometry, material);
+      cylinder.position.copy(start).add(end).multiplyScalar(0.5);
+      cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      return cylinder;
+    }
+
+    function labelSprite(text, position, scale = 0.34) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = "700 28px ui-monospace, monospace";
+      ctx.fillStyle = "#00ff66";
+      ctx.shadowColor = "#00ff66";
+      ctx.shadowBlur = 12;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.9 });
+      const sprite = new THREE.Sprite(material);
+      sprite.position.copy(position);
+      sprite.scale.set(scale * 3.6, scale * 0.9, 1);
+      return sprite;
+    }
+
+    function proteinCenter(chain) {
+      const xs = chain.map(d => d.x);
+      const ys = chain.map(d => d.y);
+      return {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2
+      };
     }
 
     function contactPairs(chain) {
