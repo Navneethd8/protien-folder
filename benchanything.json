@@ -12,8 +12,18 @@
       "description": "JSON object containing scenario, sequence, placed chain coordinates, next residue class, critical-residue flag, valid directions, score_so_far, health_burden, and action_schema."
     },
     "action_space": {
-      "type": "json",
-      "description": "Return a JSON object: {\"direction\":\"up|right|down|left\", \"mutation\":\"keep|conservative|risky|repair\"}. Direction places the next residue on the lattice. Mutation changes health risk and sometimes residue class."
+      "fields": {
+        "direction": {
+          "type": "discrete",
+          "enum_values": ["up", "right", "down", "left"],
+          "description": "Direction used to place the next residue on the 2D lattice."
+        },
+        "mutation": {
+          "type": "discrete",
+          "enum_values": ["keep", "conservative", "risky", "repair"],
+          "description": "Mutation intervention for the next residue. Prefer keep/repair over risky mutations at critical residues."
+        }
+      }
     },
     "reward": {
       "type": "scalar",
